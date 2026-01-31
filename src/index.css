@@ -1,0 +1,123 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Kurdish color scheme - kesk u sor u zer */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 148 100% 32%; /* Kurdish green */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 358 84% 52%; /* Kurdish red */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 52 100% 50%; /* Kurdish yellow muted */
+    --muted-foreground: 0 0% 20%;
+    --accent: 52 100% 50%; /* Kurdish yellow */
+    --accent-foreground: 0 0% 9%;
+    --destructive: 358 84% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 148 100% 32%;
+    --radius: 0.5rem;
+    --chart-1: 148 100% 32%;
+    --chart-2: 358 84% 52%;
+    --chart-3: 52 100% 50%;
+    --chart-4: 148 100% 25%;
+    --chart-5: 358 84% 40%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 0 0% 3.9%;
+    --sidebar-primary: 148 100% 32%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 52 100% 50%;
+    --sidebar-accent-foreground: 0 0% 9%;
+    --sidebar-border: 0 0% 89.8%;
+    --sidebar-ring: 148 100% 32%;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 148 100% 40%; /* Kurdish green dark */
+    --primary-foreground: 0 0% 9%;
+    --secondary: 358 84% 60%; /* Kurdish red dark */
+    --secondary-foreground: 0 0% 9%;
+    --muted: 52 100% 30%; /* Kurdish yellow dark muted */
+    --muted-foreground: 0 0% 98%;
+    --accent: 52 100% 45%; /* Kurdish yellow dark */
+    --accent-foreground: 0 0% 9%;
+    --destructive: 358 84% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 148 100% 40%;
+    --chart-1: 148 100% 40%;
+    --chart-2: 358 84% 60%;
+    --chart-3: 52 100% 45%;
+    --chart-4: 148 100% 30%;
+    --chart-5: 358 84% 50%;
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 148 100% 40%;
+    --sidebar-primary-foreground: 0 0% 9%;
+    --sidebar-accent: 52 100% 45%;
+    --sidebar-accent-foreground: 0 0% 9%;
+    --sidebar-border: 0 0% 14.9%;
+    --sidebar-ring: 148 100% 40%;
+  }
+}
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans dark:bg-background dark:text-foreground;
+  }
+
+  pre, code {
+    @apply font-mono;
+  }
+}
+
+.markdown-editor {
+  @apply font-mono text-base leading-relaxed;
+}
+
+.markdown-preview {
+  @apply prose max-w-none prose-blue dark:prose-invert;
+}
+
+.markdown-preview pre {
+  @apply bg-secondary p-4 rounded-md overflow-x-auto;
+}
+
+.markdown-preview code {
+  @apply text-sm font-mono text-primary;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  @apply font-sans font-semibold text-foreground;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  @apply my-4 ml-6;
+}

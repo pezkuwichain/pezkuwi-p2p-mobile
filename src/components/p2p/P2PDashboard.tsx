@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { PlusCircle, Home, ClipboardList, TrendingUp, CheckCircle2, Clock, Store, Zap, Blocks } from 'lucide-react';
+import {
+  PlusCircle, ClipboardList, TrendingUp, CheckCircle2, Clock,
+  ArrowLeft, Zap, Blocks, Wallet, ArrowDownToLine, ArrowUpFromLine
+} from 'lucide-react';
 import { AdList } from './AdList';
 import { CreateAd } from './CreateAd';
 import { NotificationBell } from './NotificationBell';
@@ -14,9 +16,13 @@ import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
 import { ExpressMode } from './ExpressMode';
 import { BlockTrade } from './BlockTrade';
+import { MyTrades } from './MyTrades';
+import { TradeDetail } from './TradeDetail';
 import { DEFAULT_FILTERS, type P2PFilters } from './types';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+
+type View = 'main' | 'create-ad' | 'my-trades' | 'trade-detail';
 
 interface UserStats {
   activeTrades: number;
@@ -25,17 +31,22 @@ interface UserStats {
 }
 
 export function P2PDashboard() {
-  const [showCreateAd, setShowCreateAd] = useState(false);
+  const [view, setView] = useState<View>('main');
+  const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [userStats, setUserStats] = useState<UserStats>({ activeTrades: 0, completedTrades: 0, totalVolume: 0 });
   const [filters, setFilters] = useState<P2PFilters>(DEFAULT_FILTERS);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isLoading, error, login } = useAuth();
 
   const handleBalanceUpdated = () => {
     setBalanceRefreshKey(prev => prev + 1);
+  };
+
+  const handleTradeStarted = (tradeId: string) => {
+    setSelectedTradeId(tradeId);
+    setView('trade-detail');
   };
 
   // Fetch user stats
@@ -44,21 +55,18 @@ export function P2PDashboard() {
       if (!user) return;
 
       try {
-        // Count active trades
         const { count: activeCount } = await supabase
           .from('p2p_fiat_trades')
           .select('*', { count: 'exact', head: true })
           .or(`seller_id.eq.${user.id},buyer_id.eq.${user.id}`)
           .in('status', ['pending', 'payment_sent']);
 
-        // Count completed trades
         const { count: completedCount } = await supabase
           .from('p2p_fiat_trades')
           .select('*', { count: 'exact', head: true })
           .or(`seller_id.eq.${user.id},buyer_id.eq.${user.id}`)
           .eq('status', 'completed');
 
-        // Calculate total volume
         const { data: trades } = await supabase
           .from('p2p_fiat_trades')
           .select('fiat_amount')
@@ -72,219 +80,229 @@ export function P2PDashboard() {
           completedTrades: completedCount || 0,
           totalVolume,
         });
-      } catch (error) {
-        console.error('Fetch stats error:', error);
+      } catch (err) {
+        console.error('Fetch stats error:', err);
       }
     };
 
     fetchStats();
   }, [user]);
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Connecting...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not authenticated
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+        <div className="text-center max-w-sm">
+          <Wallet className="w-16 h-16 text-primary mx-auto mb-4" />
+          <h1 className="text-2xl font-bold mb-2">P2P Trading</h1>
+          <p className="text-muted-foreground mb-6">
+            Trade crypto with local currency securely via Telegram.
+          </p>
+          {error && (
+            <p className="text-red-500 text-sm mb-4">{error}</p>
+          )}
+          <Button onClick={login} size="lg" className="w-full">
+            Login with Telegram
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Trade detail view
+  if (view === 'trade-detail' && selectedTradeId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 bg-background/95 backdrop-blur border-b border-border p-4">
+          <Button variant="ghost" size="sm" onClick={() => setView('my-trades')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+        </header>
+        <TradeDetail tradeId={selectedTradeId} />
+      </div>
+    );
+  }
+
+  // My trades view
+  if (view === 'my-trades') {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 bg-background/95 backdrop-blur border-b border-border p-4 flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => setView('main')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <h1 className="font-semibold">My Trades</h1>
+          <div className="w-16" />
+        </header>
+        <MyTrades onTradeSelect={(id) => {
+          setSelectedTradeId(id);
+          setView('trade-detail');
+        }} />
+      </div>
+    );
+  }
+
+  // Create ad view
+  if (view === 'create-ad') {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 bg-background/95 backdrop-blur border-b border-border p-4 flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => setView('main')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <h1 className="font-semibold">Create Ad</h1>
+          <div className="w-16" />
+        </header>
+        <CreateAd onAdCreated={() => setView('main')} />
+      </div>
+    );
+  }
+
+  // Main dashboard view
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="flex items-center justify-between mb-4">
-        <Button
-          variant="ghost"
-          onClick={() => navigate('/')}
-          className="text-gray-400 hover:text-white"
-        >
-          <Home className="w-4 h-4 mr-2" />
-          Back to Home
-        </Button>
-        <div className="flex items-center gap-2">
-          <NotificationBell />
+    <div className="min-h-screen bg-background pb-20">
+      {/* Header */}
+      <header className="sticky top-0 bg-background/95 backdrop-blur border-b border-border p-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold">P2P Trading</h1>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setView('my-trades')}
+            >
+              <ClipboardList className="w-4 h-4" />
+              {userStats.activeTrades > 0 && (
+                <Badge className="ml-1 bg-yellow-500 text-black text-xs">
+                  {userStats.activeTrades}
+                </Badge>
+              )}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="p-4 space-y-4">
+        {/* Balance Card */}
+        <InternalBalanceCard
+          key={balanceRefreshKey}
+          onDeposit={() => setShowDepositModal(true)}
+          onWithdraw={() => setShowWithdrawModal(true)}
+        />
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-2">
+          <Card className="bg-card">
+            <CardContent className="p-3 text-center">
+              <Clock className="w-4 h-4 text-yellow-400 mx-auto mb-1" />
+              <p className="text-lg font-bold">{userStats.activeTrades}</p>
+              <p className="text-[10px] text-muted-foreground">Active</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card">
+            <CardContent className="p-3 text-center">
+              <CheckCircle2 className="w-4 h-4 text-green-400 mx-auto mb-1" />
+              <p className="text-lg font-bold">{userStats.completedTrades}</p>
+              <p className="text-[10px] text-muted-foreground">Done</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card">
+            <CardContent className="p-3 text-center">
+              <TrendingUp className="w-4 h-4 text-blue-400 mx-auto mb-1" />
+              <p className="text-lg font-bold">${userStats.totalVolume > 1000 ? `${(userStats.totalVolume / 1000).toFixed(1)}K` : userStats.totalVolume}</p>
+              <p className="text-[10px] text-muted-foreground">Volume</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-3 gap-2">
           <Button
             variant="outline"
-            onClick={() => navigate('/p2p/merchant')}
-            className="border-gray-700 hover:bg-gray-800"
+            size="sm"
+            className="h-auto py-3 flex-col"
+            onClick={() => setShowDepositModal(true)}
           >
-            <Store className="w-4 h-4 mr-2" />
-            Merchant
+            <ArrowDownToLine className="w-4 h-4 mb-1" />
+            <span className="text-xs">Deposit</span>
           </Button>
           <Button
             variant="outline"
-            onClick={() => navigate('/p2p/orders')}
-            className="border-gray-700 hover:bg-gray-800"
+            size="sm"
+            className="h-auto py-3 flex-col"
+            onClick={() => setShowWithdrawModal(true)}
           >
-            <ClipboardList className="w-4 h-4 mr-2" />
-            My Trades
-            {userStats.activeTrades > 0 && (
-              <Badge className="ml-2 bg-yellow-500 text-black">
-                {userStats.activeTrades}
-              </Badge>
-            )}
+            <ArrowUpFromLine className="w-4 h-4 mb-1" />
+            <span className="text-xs">Withdraw</span>
+          </Button>
+          <Button
+            size="sm"
+            className="h-auto py-3 flex-col"
+            onClick={() => setView('create-ad')}
+          >
+            <PlusCircle className="w-4 h-4 mb-1" />
+            <span className="text-xs">Post Ad</span>
           </Button>
         </div>
+
+        {/* Filter Bar */}
+        <QuickFilterBar filters={filters} onFiltersChange={setFilters} />
+
+        {/* Main Tabs */}
+        <Tabs defaultValue="buy" className="w-full">
+          <TabsList className="grid w-full grid-cols-4 h-auto">
+            <TabsTrigger value="express" className="text-xs py-2">
+              <Zap className="w-3 h-3 mr-1" />
+              Express
+            </TabsTrigger>
+            <TabsTrigger value="buy" className="text-xs py-2">Buy</TabsTrigger>
+            <TabsTrigger value="sell" className="text-xs py-2">Sell</TabsTrigger>
+            <TabsTrigger value="otc" className="text-xs py-2">
+              <Blocks className="w-3 h-3 mr-1" />
+              OTC
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="express" className="mt-4">
+            <ExpressMode onTradeStarted={handleTradeStarted} />
+          </TabsContent>
+
+          <TabsContent value="buy" className="mt-4">
+            <AdList type="buy" filters={filters} />
+          </TabsContent>
+
+          <TabsContent value="sell" className="mt-4">
+            <AdList type="sell" filters={filters} />
+          </TabsContent>
+
+          <TabsContent value="otc" className="mt-4">
+            <BlockTrade />
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {/* Stats Cards and Balance Card */}
-      {user && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-          {/* Internal Balance Card - Takes more space */}
-          <div className="lg:col-span-1">
-            <InternalBalanceCard
-              key={balanceRefreshKey}
-              onDeposit={() => setShowDepositModal(true)}
-              onWithdraw={() => setShowWithdrawModal(true)}
-            />
-          </div>
-
-          {/* Stats Cards */}
-          <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="bg-gray-900 border-gray-800">
-              <CardContent className="py-4 flex items-center gap-3">
-                <div className="p-2 bg-yellow-500/20 rounded-lg">
-                  <Clock className="w-5 h-5 text-yellow-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{userStats.activeTrades}</p>
-                  <p className="text-sm text-gray-400">Active Trades</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-900 border-gray-800">
-              <CardContent className="py-4 flex items-center gap-3">
-                <div className="p-2 bg-green-500/20 rounded-lg">
-                  <CheckCircle2 className="w-5 h-5 text-green-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{userStats.completedTrades}</p>
-                  <p className="text-sm text-gray-400">Completed</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-900 border-gray-800">
-              <CardContent className="py-4 flex items-center gap-3">
-                <div className="p-2 bg-blue-500/20 rounded-lg">
-                  <TrendingUp className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">${userStats.totalVolume.toLocaleString()}</p>
-                  <p className="text-sm text-gray-400">Volume</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-4xl font-bold text-white">P2P Trading</h1>
-          <p className="text-gray-400">Buy and sell crypto with your local currency.</p>
-        </div>
-        <Button onClick={() => setShowCreateAd(true)}>
-          <PlusCircle className="w-4 h-4 mr-2" />
-          Post a New Ad
-        </Button>
-      </div>
-
-      {showCreateAd ? (
-        <CreateAd onAdCreated={() => setShowCreateAd(false)} />
-      ) : (
-        <>
-          {/* Quick Filter Bar */}
-          <QuickFilterBar filters={filters} onFiltersChange={setFilters} />
-
-          <Tabs defaultValue="buy">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="express" className="flex items-center gap-1">
-                <Zap className="w-3 h-3" />
-                Express
-              </TabsTrigger>
-              <TabsTrigger value="buy">Buy</TabsTrigger>
-              <TabsTrigger value="sell">Sell</TabsTrigger>
-              <TabsTrigger value="my-ads">My Ads</TabsTrigger>
-              <TabsTrigger value="otc" className="flex items-center gap-1">
-                <Blocks className="w-3 h-3" />
-                OTC
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="express">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
-                <ExpressMode onTradeStarted={(id) => navigate(`/p2p/trade/${id}`)} />
-                <div className="space-y-4">
-                  <Card className="bg-gray-900 border-gray-800">
-                    <CardContent className="pt-6">
-                      <h3 className="text-lg font-semibold text-white mb-2">Why Express Mode?</h3>
-                      <ul className="space-y-2 text-sm text-gray-400">
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-400" />
-                          Instant best-rate matching
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-400" />
-                          Verified merchants only
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-400" />
-                          Escrow protection
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-400" />
-                          No manual offer selection
-                        </li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </TabsContent>
-            <TabsContent value="buy">
-              <AdList type="buy" filters={filters} />
-            </TabsContent>
-            <TabsContent value="sell">
-              <AdList type="sell" filters={filters} />
-            </TabsContent>
-            <TabsContent value="my-ads">
-              <AdList type="my-ads" filters={filters} />
-            </TabsContent>
-            <TabsContent value="otc">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
-                <BlockTrade />
-                <div className="space-y-4">
-                  <Card className="bg-gray-900 border-gray-800">
-                    <CardContent className="pt-6">
-                      <h3 className="text-lg font-semibold text-white mb-2">Block Trade Benefits</h3>
-                      <ul className="space-y-2 text-sm text-gray-400">
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-purple-400" />
-                          Custom pricing negotiation
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-purple-400" />
-                          Dedicated OTC desk support
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-purple-400" />
-                          Multi-tranche settlements
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-purple-400" />
-                          Enhanced privacy
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-purple-400" />
-                          Flexible payment terms
-                        </li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </>
-      )}
-
-      {/* Deposit Modal */}
+      {/* Modals */}
       <DepositModal
         isOpen={showDepositModal}
         onClose={() => setShowDepositModal(false)}
         onSuccess={handleBalanceUpdated}
       />
-
-      {/* Withdraw Modal */}
       <WithdrawModal
         isOpen={showWithdrawModal}
         onClose={() => setShowWithdrawModal(false)}

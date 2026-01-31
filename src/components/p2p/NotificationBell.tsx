@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -37,14 +36,12 @@ interface Notification {
 }
 
 export function NotificationBell() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
 
-  // Fetch notifications
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
 
@@ -67,12 +64,10 @@ export function NotificationBell() {
     }
   }, [user]);
 
-  // Initial fetch
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // Real-time subscription
   useEffect(() => {
     if (!user) return;
 
@@ -90,6 +85,8 @@ export function NotificationBell() {
           const newNotif = payload.new as Notification;
           setNotifications(prev => [newNotif, ...prev.slice(0, 19)]);
           setUnreadCount(prev => prev + 1);
+          // Haptic feedback
+          window.Telegram?.WebApp.HapticFeedback.notificationOccurred('success');
         }
       )
       .subscribe();
@@ -99,7 +96,6 @@ export function NotificationBell() {
     };
   }, [user]);
 
-  // Mark as read
   const markAsRead = async (notificationId: string) => {
     try {
       await supabase
@@ -116,7 +112,6 @@ export function NotificationBell() {
     }
   };
 
-  // Mark all as read
   const markAllAsRead = async () => {
     if (!user) return;
 
@@ -134,21 +129,13 @@ export function NotificationBell() {
     }
   };
 
-  // Handle notification click
   const handleClick = (notification: Notification) => {
-    // Mark as read
     if (!notification.is_read) {
       markAsRead(notification.id);
     }
-
-    // Navigate to reference
-    if (notification.reference_type === 'trade' && notification.reference_id) {
-      navigate(`/p2p/trade/${notification.reference_id}`);
-      setIsOpen(false);
-    }
+    setIsOpen(false);
   };
 
-  // Get icon for notification type
   const getIcon = (type: string) => {
     switch (type) {
       case 'new_message':
@@ -170,7 +157,6 @@ export function NotificationBell() {
     }
   };
 
-  // Format time ago
   const formatTimeAgo = (dateString: string) => {
     const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
     if (seconds < 60) return 'Just now';
@@ -187,11 +173,7 @@ export function NotificationBell() {
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="relative text-gray-400 hover:text-white"
-        >
+        <Button variant="ghost" size="sm" className="relative">
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center bg-red-500 text-white text-xs rounded-full">
@@ -201,33 +183,30 @@ export function NotificationBell() {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent
-        align="end"
-        className="w-80 bg-gray-900 border-gray-800"
-      >
+      <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuLabel className="flex items-center justify-between">
-          <span className="text-white">Notifications</span>
+          <span>Notifications</span>
           {unreadCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
               onClick={markAllAsRead}
-              className="text-xs text-gray-400 hover:text-white h-auto py-1"
+              className="text-xs h-auto py-1"
             >
               <CheckCheck className="w-3 h-3 mr-1" />
               Mark all read
             </Button>
           )}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-gray-800" />
+        <DropdownMenuSeparator />
 
         <ScrollArea className="h-[300px]">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
               <Bell className="w-8 h-8 mb-2" />
               <p className="text-sm">No notifications</p>
             </div>
@@ -236,23 +215,19 @@ export function NotificationBell() {
               <DropdownMenuItem
                 key={notification.id}
                 onClick={() => handleClick(notification)}
-                className={`
-                  flex items-start gap-3 p-3 cursor-pointer
-                  ${!notification.is_read ? 'bg-gray-800/50' : ''}
-                  hover:bg-gray-800
-                `}
+                className={`flex items-start gap-3 p-3 cursor-pointer ${!notification.is_read ? 'bg-accent/50' : ''}`}
               >
                 <div className="mt-0.5">{getIcon(notification.type)}</div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${!notification.is_read ? 'text-white font-medium' : 'text-gray-300'}`}>
+                  <p className={`text-sm ${!notification.is_read ? 'font-medium' : ''}`}>
                     {notification.title}
                   </p>
                   {notification.message && (
-                    <p className="text-xs text-gray-500 truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       {notification.message}
                     </p>
                   )}
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-muted-foreground/60 mt-1">
                     {formatTimeAgo(notification.created_at)}
                   </p>
                 </div>
@@ -263,21 +238,6 @@ export function NotificationBell() {
             ))
           )}
         </ScrollArea>
-
-        {notifications.length > 0 && (
-          <>
-            <DropdownMenuSeparator className="bg-gray-800" />
-            <DropdownMenuItem
-              onClick={() => {
-                navigate('/p2p/orders');
-                setIsOpen(false);
-              }}
-              className="justify-center text-gray-400 hover:text-white cursor-pointer"
-            >
-              View all trades
-            </DropdownMenuItem>
-          </>
-        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -11,7 +11,7 @@ import {
   Lock,
   Unlock
 } from 'lucide-react';
-import { getInternalBalances, type InternalBalance } from '@shared/lib/p2p-fiat';
+import { getInternalBalances, type InternalBalance } from '@/lib/p2p-fiat';
 
 interface InternalBalanceCardProps {
   onDeposit?: () => void;

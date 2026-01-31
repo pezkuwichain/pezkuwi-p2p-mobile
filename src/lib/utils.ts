@@ -2,13 +2,18 @@ import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
 /**
- * Web-specific className utility (uses Tailwind merge)
+ * Utility function to merge class names with Tailwind
  */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
 /**
- * Re-export formatNumber from shared utils
+ * Format a number with locale-specific formatting
  */
-export { formatNumber } from '@pezkuwi/utils/format';
+export function formatNumber(value: number, decimals: number = 2): string {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals
+  });
+}

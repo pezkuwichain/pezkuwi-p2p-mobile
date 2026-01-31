@@ -7,7 +7,7 @@ import { Loader2, Shield, Zap } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { TradeModal } from './TradeModal';
 import { MerchantTierBadge } from './MerchantTierBadge';
-import { getUserReputation, type P2PFiatOffer, type P2PReputation } from '@shared/lib/p2p-fiat';
+import { getUserReputation, type P2PFiatOffer, type P2PReputation } from '@/lib/p2p-fiat';
 import { supabase } from '@/lib/supabase';
 import type { P2PFilters } from './types';
 

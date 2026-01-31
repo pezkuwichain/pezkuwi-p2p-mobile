@@ -17,9 +17,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Zap, ArrowRight, Shield, Clock, Star, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { CryptoToken, FiatCurrency } from '@pezkuwi/lib/p2p-fiat';
+import type { CryptoToken, FiatCurrency } from '@/lib/p2p-fiat';
 
 interface BestOffer {
   id: string;
@@ -68,7 +67,6 @@ export function ExpressMode({ onTradeStarted }: ExpressModeProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   // Calculate conversion
   const fiatSymbol = SUPPORTED_FIATS.find(f => f.code === fiat)?.symbol || '';
@@ -172,12 +170,7 @@ export function ExpressMode({ onTradeStarted }: ExpressModeProps) {
       }
 
       toast.success('Express trade started!');
-
-      if (onTradeStarted) {
-        onTradeStarted(response.trade_id);
-      } else {
-        navigate(`/p2p/trade/${response.trade_id}`);
-      }
+      onTradeStarted?.(response.trade_id);
     } catch (err) {
       console.error('Express trade error:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to start trade');

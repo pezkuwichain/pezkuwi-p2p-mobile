@@ -15,7 +15,7 @@ import {
   type PaymentMethod,
   type FiatCurrency,
   type CryptoToken
-} from '@shared/lib/p2p-fiat';
+} from '@/lib/p2p-fiat';
 
 interface CreateAdProps {
   onAdCreated: () => void;

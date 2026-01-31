@@ -1,3 +1,9 @@
+/**
+ * Withdraw Modal - Mobile P2P
+ *
+ * Request withdrawal from internal P2P balance to external wallet.
+ * Backend processes the actual blockchain transaction.
+ */
 import { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -18,26 +24,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
-  ArrowUpFromLine,
-  Clock,
-  Info
+  ArrowUpFromLine
 } from 'lucide-react';
-import { usePezkuwi } from '@/contexts/PezkuwiContext';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 import {
-  getInternalBalances,
   requestWithdraw,
-  getDepositWithdrawHistory,
+  getInternalBalance,
   type CryptoToken,
-  type InternalBalance,
-  type DepositWithdrawRequest
-} from '@shared/lib/p2p-fiat';
+  type InternalBalance
+} from '@/lib/p2p-fiat';
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -45,60 +45,34 @@ interface WithdrawModalProps {
   onSuccess?: () => void;
 }
 
-type WithdrawStep = 'form' | 'confirm' | 'success';
-
 export function WithdrawModal({ isOpen, onClose, onSuccess }: WithdrawModalProps) {
-  const { selectedAccount } = usePezkuwi();
-
-  const [step, setStep] = useState<WithdrawStep>('form');
+  const { user } = useAuth();
   const [token, setToken] = useState<CryptoToken>('HEZ');
   const [amount, setAmount] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
-  const [balances, setBalances] = useState<InternalBalance[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<DepositWithdrawRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [requestId, setRequestId] = useState<string>('');
+  const [balance, setBalance] = useState<InternalBalance | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  // Network fee estimate (in HEZ)
-  const NETWORK_FEE = 0.01;
-  const MIN_WITHDRAWAL = 0.1;
-
-  // Fetch balances and pending requests on mount
   useEffect(() => {
-    if (isOpen) {
-      fetchData();
-      // Pre-fill wallet address from connected account
-      if (selectedAccount?.address) {
-        setWalletAddress(selectedAccount.address);
+    if (isOpen && user) {
+      fetchBalance();
+      // Pre-fill wallet from user profile
+      if (user.wallet_address) {
+        setWalletAddress(user.wallet_address);
       }
     }
-  }, [isOpen, selectedAccount]);
+  }, [isOpen, user, token]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [balanceData, historyData] = await Promise.all([
-        getInternalBalances(),
-        getDepositWithdrawHistory()
-      ]);
-      setBalances(balanceData);
-      // Filter for pending withdrawal requests
-      setPendingRequests(
-        historyData.filter(r => r.request_type === 'withdraw' && r.status === 'pending')
-      );
-    } catch (error) {
-      console.error('Fetch data error:', error);
-    } finally {
-      setLoading(false);
-    }
+  const fetchBalance = async () => {
+    const bal = await getInternalBalance(token);
+    setBalance(bal);
   };
 
   const resetModal = () => {
-    setStep('form');
     setAmount('');
-    setSubmitting(false);
-    setRequestId('');
+    setLoading(false);
+    setSuccess(false);
   };
 
   const handleClose = () => {
@@ -106,102 +80,83 @@ export function WithdrawModal({ isOpen, onClose, onSuccess }: WithdrawModalProps
     onClose();
   };
 
-  const getAvailableBalance = (): number => {
-    const balance = balances.find(b => b.token === token);
-    return balance?.available_balance || 0;
-  };
-
-  const getLockedBalance = (): number => {
-    const balance = balances.find(b => b.token === token);
-    return balance?.locked_balance || 0;
-  };
-
-  const getMaxWithdrawable = (): number => {
-    const available = getAvailableBalance();
-    // Subtract network fee for HEZ
-    if (token === 'HEZ') {
-      return Math.max(0, available - NETWORK_FEE);
+  const handleWithdraw = async () => {
+    if (!walletAddress) {
+      toast.error('Please enter wallet address');
+      return;
     }
-    return available;
+
+    const withdrawAmount = parseFloat(amount);
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (balance && withdrawAmount > balance.available_balance) {
+      toast.error('Insufficient balance');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await requestWithdraw(token, withdrawAmount, walletAddress);
+      setSuccess(true);
+      window.Telegram?.WebApp.HapticFeedback.notificationOccurred('success');
+      onSuccess?.();
+    } catch (error) {
+      window.Telegram?.WebApp.HapticFeedback.notificationOccurred('error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSetMax = () => {
-    const max = getMaxWithdrawable();
-    setAmount(max.toFixed(4));
-  };
-
-  const validateWithdrawal = (): string | null => {
-    const withdrawAmount = parseFloat(amount);
-
-    if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
-      return 'Please enter a valid amount';
-    }
-
-    if (withdrawAmount < MIN_WITHDRAWAL) {
-      return `Minimum withdrawal is ${MIN_WITHDRAWAL} ${token}`;
-    }
-
-    if (withdrawAmount > getMaxWithdrawable()) {
-      return 'Insufficient available balance';
-    }
-
-    if (!walletAddress || walletAddress.length < 40) {
-      return 'Please enter a valid wallet address';
-    }
-
-    // Check for pending requests
-    const hasPendingForToken = pendingRequests.some(r => r.token === token);
-    if (hasPendingForToken) {
-      return `You already have a pending ${token} withdrawal request`;
-    }
-
-    return null;
-  };
-
-  const handleContinue = () => {
-    const error = validateWithdrawal();
-    if (error) {
-      toast.error(error);
-      return;
-    }
-    setStep('confirm');
-  };
-
-  const handleSubmitWithdrawal = async () => {
-    const error = validateWithdrawal();
-    if (error) {
-      toast.error(error);
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      const withdrawAmount = parseFloat(amount);
-      const id = await requestWithdraw(token, withdrawAmount, walletAddress);
-      setRequestId(id);
-      setStep('success');
-      onSuccess?.();
-    } catch (error) {
-      console.error('Submit withdrawal error:', error);
-    } finally {
-      setSubmitting(false);
+    if (balance) {
+      setAmount(balance.available_balance.toString());
     }
   };
 
-  const renderFormStep = () => (
-    <div className="space-y-6">
-      {loading ? (
+  if (success) {
+    return (
+      <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+        <DialogContent className="max-w-sm">
+          <div className="space-y-4 text-center py-4">
+            <div className="w-16 h-16 mx-auto rounded-full bg-green-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-8 w-8 text-green-500" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-green-500">Request Submitted!</h3>
+              <p className="text-muted-foreground text-sm mt-1">
+                {amount} {token} withdrawal is being processed.
+              </p>
+              <p className="text-muted-foreground text-xs mt-2">
+                Usually completes within 5-10 minutes.
+              </p>
+            </div>
+            <Button onClick={handleClose} className="w-full">Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowUpFromLine className="h-5 w-5" />
+            Withdraw
+          </DialogTitle>
+          <DialogDescription>
+            Withdraw from P2P balance to your wallet
+          </DialogDescription>
+        </DialogHeader>
+
         <div className="space-y-4">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      ) : (
-        <>
-          {/* Token Selection */}
           <div className="space-y-2">
-            <Label>Select Token</Label>
+            <Label>Token</Label>
             <Select value={token} onValueChange={(v) => setToken(v as CryptoToken)}>
               <SelectTrigger>
                 <SelectValue />
@@ -213,245 +168,61 @@ export function WithdrawModal({ isOpen, onClose, onSuccess }: WithdrawModalProps
             </Select>
           </div>
 
-          {/* Balance Display */}
-          <div className="p-4 rounded-lg bg-muted/50 border">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Available</p>
-                <p className="font-semibold text-green-500">
-                  {getAvailableBalance().toFixed(4)} {token}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Locked (Escrow)</p>
-                <p className="font-semibold text-yellow-500">
-                  {getLockedBalance().toFixed(4)} {token}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Amount Input */}
           <div className="space-y-2">
-            <Label>Withdrawal Amount</Label>
-            <div className="relative">
-              <Input
-                type="number"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                min="0"
-                step="0.0001"
-              />
-              <div className="absolute right-14 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                {token}
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-7 text-xs"
+            <div className="flex justify-between">
+              <Label>Amount</Label>
+              <button
                 onClick={handleSetMax}
+                className="text-xs text-primary hover:underline"
               >
-                MAX
-              </Button>
+                Max: {balance?.available_balance.toFixed(4) || '0'} {token}
+              </button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Min: {MIN_WITHDRAWAL} {token} | Max: {getMaxWithdrawable().toFixed(4)} {token}
-            </p>
+            <Input
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              min="0"
+              max={balance?.available_balance}
+              step="0.0001"
+            />
           </div>
 
-          {/* Wallet Address */}
           <div className="space-y-2">
-            <Label>Destination Wallet Address</Label>
+            <Label>Wallet Address</Label>
             <Input
               value={walletAddress}
               onChange={(e) => setWalletAddress(e.target.value)}
               placeholder="5..."
               className="font-mono text-xs"
             />
-            <p className="text-xs text-muted-foreground">
-              Only PezkuwiChain addresses are supported
-            </p>
           </div>
 
-          {/* Network Fee Info */}
-          {token === 'HEZ' && (
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                Network fee: ~{NETWORK_FEE} HEZ (deducted from withdrawal amount)
-              </AlertDescription>
-            </Alert>
-          )}
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              Withdrawals are processed by the platform. Network fee will be deducted.
+            </AlertDescription>
+          </Alert>
 
-          {/* Pending Requests Warning */}
-          {pendingRequests.length > 0 && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                You have {pendingRequests.length} pending withdrawal request(s).
-                Please wait for them to complete.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={handleClose}>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={handleClose} className="flex-1">
               Cancel
             </Button>
             <Button
-              onClick={handleContinue}
-              disabled={!amount || parseFloat(amount) <= 0}
+              onClick={handleWithdraw}
+              disabled={loading || !amount || !walletAddress}
+              className="flex-1"
             >
-              Continue
+              {loading ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>
+              ) : (
+                'Withdraw'
+              )}
             </Button>
           </DialogFooter>
-        </>
-      )}
-    </div>
-  );
-
-  const renderConfirmStep = () => {
-    const withdrawAmount = parseFloat(amount);
-    const receiveAmount = token === 'HEZ' ? withdrawAmount - NETWORK_FEE : withdrawAmount;
-
-    return (
-      <div className="space-y-6">
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            Please review your withdrawal details carefully.
-            This action cannot be undone.
-          </AlertDescription>
-        </Alert>
-
-        <div className="p-4 rounded-lg bg-muted/50 border space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Token</span>
-            <span className="font-semibold">{token}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Withdrawal Amount</span>
-            <span className="font-semibold">{withdrawAmount.toFixed(4)} {token}</span>
-          </div>
-          {token === 'HEZ' && (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Network Fee</span>
-              <span className="text-yellow-500">-{NETWORK_FEE} HEZ</span>
-            </div>
-          )}
-          <div className="border-t pt-4 flex justify-between items-center">
-            <span className="text-muted-foreground">You Will Receive</span>
-            <span className="font-bold text-lg text-green-500">
-              {receiveAmount.toFixed(4)} {token}
-            </span>
-          </div>
         </div>
-
-        <div className="p-4 rounded-lg bg-muted/30 border">
-          <p className="text-xs text-muted-foreground mb-1">Destination Address</p>
-          <p className="font-mono text-xs break-all">{walletAddress}</p>
-        </div>
-
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Clock className="h-4 w-4" />
-          <span>Processing time: Usually within 5-30 minutes</span>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setStep('form')}>
-            Back
-          </Button>
-          <Button
-            onClick={handleSubmitWithdrawal}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <ArrowUpFromLine className="h-4 w-4 mr-2" />
-                Confirm Withdrawal
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </div>
-    );
-  };
-
-  const renderSuccessStep = () => (
-    <div className="space-y-6 text-center">
-      <div className="w-20 h-20 mx-auto rounded-full bg-green-500/10 flex items-center justify-center">
-        <CheckCircle2 className="h-10 w-10 text-green-500" />
-      </div>
-
-      <div>
-        <h3 className="text-xl font-semibold text-green-500">
-          Withdrawal Request Submitted!
-        </h3>
-        <p className="text-muted-foreground mt-2">
-          Your withdrawal request has been submitted for processing.
-        </p>
-      </div>
-
-      <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Request ID</span>
-          <Badge variant="outline" className="font-mono text-xs">
-            {requestId.slice(0, 8)}...
-          </Badge>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Status</span>
-          <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30">
-            <Clock className="h-3 w-3 mr-1" />
-            Processing
-          </Badge>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Amount</span>
-          <span className="font-semibold">{amount} {token}</span>
-        </div>
-      </div>
-
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertDescription>
-          You can track your withdrawal status in the transaction history.
-          Funds will arrive in your wallet within 5-30 minutes.
-        </AlertDescription>
-      </Alert>
-
-      <Button onClick={handleClose} className="w-full">
-        Done
-      </Button>
-    </div>
-  );
-
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ArrowUpFromLine className="h-5 w-5" />
-            Withdraw from P2P Balance
-          </DialogTitle>
-          {step !== 'success' && (
-            <DialogDescription>
-              {step === 'form' && 'Withdraw crypto from your P2P balance to external wallet'}
-              {step === 'confirm' && 'Review and confirm your withdrawal'}
-            </DialogDescription>
-          )}
-        </DialogHeader>
-
-        {step === 'form' && renderFormStep()}
-        {step === 'confirm' && renderConfirmStep()}
-        {step === 'success' && renderSuccessStep()}
       </DialogContent>
     </Dialog>
   );

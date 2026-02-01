@@ -9,7 +9,7 @@ import {
   generateZKProof,
   DEFAULT_BADGES,
   ROLES
-} from '@pezkuwi/lib/identity';
+} from '@/lib/identity';
 
 interface IdentityContextType {
   profile: IdentityProfile | null;
@@ -24,20 +24,20 @@ interface IdentityContextType {
 const IdentityContext = createContext<IdentityContextType | undefined>(undefined);
 
 export function IdentityProvider({ children }: { children: React.ReactNode }) {
-  const { account } = useWallet();
+  const { address } = useWallet();
   const [profile, setProfile] = useState<IdentityProfile | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
-    if (account) {
+    if (address) {
       // Load or create profile for connected wallet
-      const storedProfile = localStorage.getItem(`identity_${account}`);
+      const storedProfile = localStorage.getItem(`identity_${address}`);
       if (storedProfile) {
         setProfile(JSON.parse(storedProfile));
       } else {
         // Create new profile
         const newProfile: IdentityProfile = {
-          address: account,
+          address: address,
           verificationLevel: 'none',
           kycStatus: 'none',
           reputationScore: 0,
@@ -51,12 +51,12 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
           }
         };
         setProfile(newProfile);
-        localStorage.setItem(`identity_${account}`, JSON.stringify(newProfile));
+        localStorage.setItem(`identity_${address}`, JSON.stringify(newProfile));
       }
     } else {
       setProfile(null);
     }
-  }, [account]);
+  }, [address]);
 
   const startKYC = async (data: KYCData) => {
     if (!profile) return;

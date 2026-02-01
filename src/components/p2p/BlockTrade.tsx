@@ -26,7 +26,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import type { CryptoToken, FiatCurrency } from '@pezkuwi/lib/p2p-fiat';
+import type { CryptoToken, FiatCurrency } from '@/lib/p2p-fiat';
 
 interface BlockTradeRequest {
   id: string;

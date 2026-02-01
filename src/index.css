@@ -42,37 +42,37 @@
   }
 
   .dark {
-    --background: 0 0% 3.9%;
+    --background: 220 13% 10%; /* Dark blue-gray like Telegram dark mode */
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+    --card: 220 13% 12%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+    --popover: 220 13% 15%; /* Slightly lighter for dropdown menus */
     --popover-foreground: 0 0% 98%;
     --primary: 148 100% 40%; /* Kurdish green dark */
-    --primary-foreground: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 358 84% 60%; /* Kurdish red dark */
-    --secondary-foreground: 0 0% 9%;
-    --muted: 52 100% 30%; /* Kurdish yellow dark muted */
-    --muted-foreground: 0 0% 98%;
-    --accent: 52 100% 45%; /* Kurdish yellow dark */
-    --accent-foreground: 0 0% 9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 220 13% 18%; /* Subtle gray for muted backgrounds */
+    --muted-foreground: 0 0% 70%; /* Light gray text for muted */
+    --accent: 52 100% 50%; /* Kurdish yellow - bright for visibility */
+    --accent-foreground: 0 0% 9%; /* Dark text on yellow */
     --destructive: 358 84% 52%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
+    --border: 220 13% 20%;
+    --input: 220 13% 18%;
     --ring: 148 100% 40%;
     --chart-1: 148 100% 40%;
     --chart-2: 358 84% 60%;
     --chart-3: 52 100% 45%;
     --chart-4: 148 100% 30%;
     --chart-5: 358 84% 50%;
-    --sidebar-background: 0 0% 7%;
+    --sidebar-background: 220 13% 8%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 148 100% 40%;
-    --sidebar-primary-foreground: 0 0% 9%;
-    --sidebar-accent: 52 100% 45%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 52 100% 50%;
     --sidebar-accent-foreground: 0 0% 9%;
-    --sidebar-border: 0 0% 14.9%;
+    --sidebar-border: 220 13% 20%;
     --sidebar-ring: 148 100% 40%;
   }
 }

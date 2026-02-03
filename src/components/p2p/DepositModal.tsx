@@ -103,11 +103,19 @@ export function DepositModal({ isOpen, onClose, onSuccess }: DepositModalProps) 
       return;
     }
 
+    // Get session token for Telegram auth
+    const sessionToken = localStorage.getItem('p2p_session');
+    if (!sessionToken) {
+      toast.error('Session expired. Please refresh the page.');
+      return;
+    }
+
     setVerifying(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('verify-deposit', {
-        body: { txHash, token, expectedAmount: depositAmount }
+      // Use verify-deposit-telegram for Telegram MiniApp users
+      const { data, error } = await supabase.functions.invoke('verify-deposit-telegram', {
+        body: { sessionToken, txHash, token, expectedAmount: depositAmount }
       });
 
       if (error) throw new Error(error.message || 'Verification failed');

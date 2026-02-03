@@ -212,7 +212,7 @@ export interface BalanceTransaction {
 // CONSTANTS
 // =====================================================
 
-const PLATFORM_ESCROW_ADDRESS = '5DFwqK698vL4gXHEcanaewnAqhxJ2rjhAogpSTHw3iwGDwd3';
+const PLATFORM_ESCROW_ADDRESS = '5H18ZZBU4LwPYbeEZ1JBGvibCU2edhhM8HNUtFi7GgC36CgS';
 
 const DEFAULT_PAYMENT_DEADLINE_MINUTES = 30;
 const DEFAULT_CONFIRMATION_DEADLINE_MINUTES = 60;

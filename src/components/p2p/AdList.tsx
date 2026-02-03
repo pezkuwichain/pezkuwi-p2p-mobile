@@ -211,107 +211,77 @@ export function AdList({ type, filters }: AdListProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {offers.map(offer => (
         <Card key={offer.id} className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-center">
-              {/* Seller Info */}
-              <div className="flex items-center gap-3">
-                <Avatar className="h-12 w-12">
-                  <AvatarFallback className="bg-green-500/20 text-green-400">
-                    {offer.seller_wallet.slice(0, 2).toUpperCase()}
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between gap-3">
+              {/* Seller Info - Compact */}
+              <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-green-500/20 text-green-400 text-xs">
+                    {(offer.seller_wallet || 'XX').slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-white">
-                      {offer.seller_wallet.slice(0, 6)}...{offer.seller_wallet.slice(-4)}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1">
+                    <p className="text-sm font-medium text-white truncate">
+                      {(offer.seller_wallet || '').slice(0, 4)}...{(offer.seller_wallet || '').slice(-3)}
                     </p>
-                    {offer.merchant_tier && (
-                      <MerchantTierBadge tier={offer.merchant_tier} size="sm" />
-                    )}
                     {offer.seller_reputation?.verified_merchant && (
-                      <Shield className="w-4 h-4 text-blue-400" title="Verified Merchant" />
-                    )}
-                    {offer.seller_reputation?.fast_trader && (
-                      <Zap className="w-4 h-4 text-yellow-400" title="Fast Trader" />
+                      <Shield className="w-3 h-3 text-blue-400 flex-shrink-0" />
                     )}
                   </div>
                   {offer.seller_reputation && (
-                    <p className="text-sm text-gray-400">
-                      {offer.seller_reputation.completed_trades} trades • {' '}
-                      {((offer.seller_reputation.completed_trades / (offer.seller_reputation.total_trades || 1)) * 100).toFixed(0)}% completion
+                    <p className="text-xs text-gray-500">
+                      {offer.seller_reputation.completed_trades} trades
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* Price */}
-              <div>
-                <p className="text-sm text-gray-400">Price</p>
-                <p className="text-xl font-bold text-green-400">
-                  {offer.price_per_unit.toFixed(2)} {offer.fiat_currency}
-                </p>
-              </div>
-
-              {/* Available */}
-              <div>
-                <p className="text-sm text-gray-400">Available</p>
-                <p className="text-lg font-semibold text-white">
-                  {offer.remaining_amount} {offer.token}
-                </p>
-                {offer.min_order_amount && (
-                  <p className="text-xs text-gray-500">
-                    Min: {offer.min_order_amount} {offer.token}
+              {/* Price & Amount - Inline */}
+              <div className="flex items-center gap-4 flex-1 justify-center">
+                <div className="text-center">
+                  <p className="text-sm font-bold text-green-400">
+                    {offer.price_per_unit?.toFixed(2) || '0.00'} {offer.fiat_currency}
                   </p>
-                )}
+                  <p className="text-xs text-gray-500">price</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-white">
+                    {offer.remaining_amount} {offer.token}
+                  </p>
+                  <p className="text-xs text-gray-500">available</p>
+                </div>
+                <div className="text-center hidden sm:block">
+                  <Badge variant="outline" className="text-xs">
+                    {offer.payment_method_name || 'N/A'}
+                  </Badge>
+                </div>
               </div>
 
-              {/* Payment Method */}
-              <div>
-                <p className="text-sm text-gray-400">Payment</p>
-                <Badge variant="outline" className="mt-1">
-                  {offer.payment_method_name || 'N/A'}
-                </Badge>
-                <p className="text-xs text-gray-500 mt-1">
-                  {offer.time_limit_minutes} min limit
-                </p>
-              </div>
-
-              {/* Action */}
-              <div className="flex flex-col items-end gap-1">
-                {offer.seller_id === user?.id && type !== 'my-ads' && (
+              {/* Action Button */}
+              <div className="flex-shrink-0">
+                {type === 'my-ads' ? (
+                  <Badge variant={offer.status === 'open' ? 'default' : 'secondary'} className="text-xs">
+                    {offer.status?.toUpperCase()}
+                  </Badge>
+                ) : offer.seller_id === user?.id ? (
                   <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-400 border-blue-500/30">
                     Your Ad
                   </Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => setSelectedOffer(offer)}
+                    className={type === 'buy' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+                  >
+                    {type === 'buy' ? 'Buy' : 'Sell'}
+                  </Button>
                 )}
-                <Button
-                  onClick={() => setSelectedOffer(offer)}
-                  disabled={type === 'my-ads' || offer.seller_id === user?.id}
-                  className="w-full md:w-auto"
-                  title={offer.seller_id === user?.id ? "You can't trade with your own ad" : ''}
-                >
-                  {type === 'buy' ? 'Buy' : 'Sell'} {offer.token}
-                </Button>
               </div>
             </div>
-
-            {/* Status badge for my-ads */}
-            {type === 'my-ads' && (
-              <div className="mt-4 pt-4 border-t border-gray-800">
-                <div className="flex items-center justify-between">
-                  <Badge 
-                    variant={offer.status === 'open' ? 'default' : 'secondary'}
-                  >
-                    {offer.status.toUpperCase()}
-                  </Badge>
-                  <p className="text-sm text-gray-400">
-                    Created: {new Date(offer.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       ))}

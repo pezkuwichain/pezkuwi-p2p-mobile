@@ -109,12 +109,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setUser(data.user);
-      setCurrentUserId(data.user.id); // Set user ID for p2p-fiat functions
+      // Use auth_user_id for P2P operations (balance queries, etc.)
+      // This is the auth.users ID used by p2p_deposit_withdraw_requests FK
+      const p2pUserId = data.auth_user_id || data.user.id;
+      setCurrentUserId(p2pUserId);
       setTelegramUser(getTelegramUser());
 
-      // Store session token if provided
+      // Store session token and auth_user_id if provided
       if (data.session_token) {
         localStorage.setItem('p2p_session', data.session_token);
+      }
+      if (data.auth_user_id) {
+        localStorage.setItem('p2p_auth_user_id', data.auth_user_id);
       }
 
       window.Telegram?.WebApp.HapticFeedback.notificationOccurred('success');
@@ -192,11 +198,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setUser(data.user);
-      setCurrentUserId(data.user.id); // Set user ID for p2p-fiat functions
+      // Use auth_user_id for P2P operations
+      const p2pUserId = data.auth_user_id || data.user.id;
+      setCurrentUserId(p2pUserId);
 
-      // Store session token
+      // Store session token and auth_user_id
       if (data.session_token) {
         localStorage.setItem('p2p_session', data.session_token);
+      }
+      if (data.auth_user_id) {
+        localStorage.setItem('p2p_auth_user_id', data.auth_user_id);
       }
 
       // Clear URL params after successful login
@@ -218,6 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Check for existing session first
       const sessionToken = localStorage.getItem('p2p_session');
+      const storedAuthUserId = localStorage.getItem('p2p_auth_user_id');
       if (sessionToken) {
         try {
           const { data, error } = await supabase.functions.invoke('telegram-auth', {
@@ -225,12 +237,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           if (!error && data?.user) {
             setUser(data.user);
-            setCurrentUserId(data.user.id); // Set user ID for p2p-fiat functions
+            // Use stored or returned auth_user_id for P2P operations
+            const p2pUserId = data.auth_user_id || storedAuthUserId || data.user.id;
+            setCurrentUserId(p2pUserId);
+            if (data.auth_user_id) {
+              localStorage.setItem('p2p_auth_user_id', data.auth_user_id);
+            }
             setIsLoading(false);
             return;
           }
         } catch {
           localStorage.removeItem('p2p_session');
+          localStorage.removeItem('p2p_auth_user_id');
         }
       }
 

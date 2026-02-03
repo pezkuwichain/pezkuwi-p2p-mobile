@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { setCurrentUserId } from '@/lib/p2p-fiat';
 
 // Telegram WebApp types
 declare global {
@@ -108,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setUser(data.user);
+      setCurrentUserId(data.user.id); // Set user ID for p2p-fiat functions
       setTelegramUser(getTelegramUser());
 
       // Store session token if provided
@@ -129,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Logout
   const logout = useCallback(() => {
     setUser(null);
+    setCurrentUserId(null); // Clear user ID for p2p-fiat functions
     localStorage.removeItem('p2p_session');
     window.Telegram?.WebApp.HapticFeedback.impactOccurred('medium');
   }, []);
@@ -189,6 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setUser(data.user);
+      setCurrentUserId(data.user.id); // Set user ID for p2p-fiat functions
 
       // Store session token
       if (data.session_token) {
@@ -221,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           if (!error && data?.user) {
             setUser(data.user);
+            setCurrentUserId(data.user.id); // Set user ID for p2p-fiat functions
             setIsLoading(false);
             return;
           }

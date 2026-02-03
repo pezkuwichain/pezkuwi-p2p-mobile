@@ -14,6 +14,38 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
 // =====================================================
+// USER ID HELPER
+// =====================================================
+
+// Store for current user ID (set by AuthContext)
+let currentUserId: string | null = null;
+
+/**
+ * Set the current user ID (called by AuthContext after login)
+ */
+export function setCurrentUserId(userId: string | null): void {
+  currentUserId = userId;
+}
+
+/**
+ * Get current user ID - checks stored ID first, then falls back to Supabase Auth
+ */
+async function getCurrentUserId(): Promise<string | null> {
+  // First check stored user ID (from Telegram auth)
+  if (currentUserId) {
+    return currentUserId;
+  }
+
+  // Fallback to Supabase Auth (for web app compatibility)
+  try {
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+// =====================================================
 // TYPES
 // =====================================================
 
@@ -358,10 +390,10 @@ async function logAction(
   details: Record<string, unknown>
 ): Promise<void> {
   try {
-    const { data: user } = await supabase.auth.getUser();
+    const userId = await getCurrentUserId();
 
     await supabase.from('p2p_audit_log').insert({
-      user_id: user.user?.id,
+      user_id: userId,
       action,
       entity_type: entityType,
       entity_id: entityId,
@@ -399,8 +431,7 @@ export async function createFiatOffer(params: CreateOfferParams): Promise<string
 
   try {
     // Get current user
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const userId = await getCurrentUserId();
     if (!userId) throw new Error('Not authenticated');
 
     toast.info('Locking crypto from your balance...');
@@ -483,8 +514,8 @@ export async function acceptFiatOffer(params: AcceptOfferParams): Promise<string
 
   try {
     // 1. Get current user
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) throw new Error('Not authenticated');
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('Not authenticated');
 
     // 2. Get offer to determine amount if not specified
     const { data: offer, error: offerError } = await supabase
@@ -503,7 +534,7 @@ export async function acceptFiatOffer(params: AcceptOfferParams): Promise<string
       const { data: reputation } = await supabase
         .from('p2p_reputation')
         .select('completed_trades, reputation_score')
-        .eq('user_id', user.user.id)
+        .eq('user_id', userId)
         .single();
 
       if (!reputation) {
@@ -520,7 +551,7 @@ export async function acceptFiatOffer(params: AcceptOfferParams): Promise<string
     // 4. Call atomic database function (prevents race condition)
     const { data: result, error: rpcError } = await supabase.rpc('accept_p2p_offer', {
       p_offer_id: offerId,
-      p_buyer_id: user.user.id,
+      p_buyer_id: userId,
       p_buyer_wallet: params.buyerWallet,
       p_amount: tradeAmount
     });
@@ -603,8 +634,7 @@ export async function markPaymentSent(
 export async function confirmPaymentReceived(tradeId: string): Promise<void> {
   try {
     // 1. Get current user (seller)
-    const { data: userData } = await supabase.auth.getUser();
-    const sellerId = userData.user?.id;
+    const sellerId = await getCurrentUserId();
     if (!sellerId) throw new Error('Not authenticated');
 
     // 2. Get trade details
@@ -688,8 +718,8 @@ export async function confirmPaymentReceived(tradeId: string): Promise<void> {
  */
 export async function cancelTrade(tradeId: string, reason?: string): Promise<void> {
   try {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) throw new Error('Not authenticated');
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('Not authenticated');
 
     // 1. Get trade details
     const { data: trade, error: tradeError } = await supabase
@@ -711,7 +741,7 @@ export async function cancelTrade(tradeId: string, reason?: string): Promise<voi
       .from('p2p_fiat_trades')
       .update({
         status: 'cancelled',
-        cancelled_by: user.user.id,
+        cancelled_by: userId,
         cancel_reason: reason,
       })
       .eq('id', tradeId);
@@ -737,7 +767,7 @@ export async function cancelTrade(tradeId: string, reason?: string): Promise<voi
 
     // 4. Audit log
     await logAction('trade', tradeId, 'cancel_trade', {
-      cancelled_by: user.user.id,
+      cancelled_by: userId,
       reason,
     });
 
@@ -906,8 +936,7 @@ export async function getTradeById(tradeId: string): Promise<P2PFiatTrade | null
  */
 export async function getInternalBalances(): Promise<InternalBalance[]> {
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const userId = await getCurrentUserId();
     if (!userId) return [];
 
     const { data, error } = await supabase.rpc('get_user_internal_balance', {
@@ -942,8 +971,7 @@ export async function requestWithdraw(
   walletAddress: string
 ): Promise<string> {
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const userId = await getCurrentUserId();
     if (!userId) throw new Error('Not authenticated');
 
     // Validate amount

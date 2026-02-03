@@ -159,6 +159,7 @@ export interface CreateOfferParams {
   timeLimitMinutes?: number;
   minOrderAmount?: number;
   maxOrderAmount?: number;
+  adType?: 'buy' | 'sell'; // Default: 'sell'
 }
 
 export interface AcceptOfferParams {
@@ -411,9 +412,9 @@ async function logAction(
 /**
  * Create a new P2P fiat offer (OKX-Style Internal Ledger)
  *
- * Steps:
+ * Uses Edge Function to:
  * 1. Lock crypto from internal balance (NO blockchain tx)
- * 2. Create offer record in Supabase
+ * 2. Create offer record in Supabase (bypasses RLS with service role)
  * 3. Update escrow tracking
  */
 export async function createFiatOffer(params: CreateOfferParams): Promise<string> {
@@ -426,74 +427,49 @@ export async function createFiatOffer(params: CreateOfferParams): Promise<string
     paymentDetails,
     timeLimitMinutes = DEFAULT_PAYMENT_DEADLINE_MINUTES,
     minOrderAmount,
-    maxOrderAmount
+    maxOrderAmount,
+    adType = 'sell'
   } = params;
 
   try {
-    // Get current user
-    const userId = await getCurrentUserId();
-    if (!userId) throw new Error('Not authenticated');
+    // Get session token for Edge Function authentication
+    const sessionToken = localStorage.getItem('p2p_session');
+    if (!sessionToken) throw new Error('Not authenticated. Please log in again.');
 
-    toast.info('Locking crypto from your balance...');
+    toast.info('Creating offer...');
 
-    // 1. Lock crypto from internal balance (NO blockchain tx!)
-    const { data: lockResult, error: lockError } = await supabase.rpc('lock_escrow_internal', {
-      p_user_id: userId,
-      p_token: token,
-      p_amount: amountCrypto
-    });
-
-    if (lockError) throw lockError;
-
-    // Parse result
-    const lockResponse = typeof lockResult === 'string' ? JSON.parse(lockResult) : lockResult;
-
-    if (!lockResponse.success) {
-      throw new Error(lockResponse.error || 'Failed to lock balance');
-    }
-
-    toast.success('Balance locked successfully');
-
-    // 2. Encrypt payment details (AES-256-GCM)
+    // Encrypt payment details (AES-256-GCM) before sending
     const encryptedDetails = await encryptPaymentDetails(paymentDetails);
 
-    // 3. Create offer in Supabase
-    const { data: offer, error: offerError } = await supabase
-      .from('p2p_fiat_offers')
-      .insert({
-        seller_id: userId,
-        seller_wallet: '', // No longer needed with internal ledger
+    // Call Edge Function (handles escrow locking + offer creation with service role)
+    const { data, error } = await supabase.functions.invoke('create-offer-telegram', {
+      body: {
+        sessionToken,
         token,
-        amount_crypto: amountCrypto,
-        fiat_currency: fiatCurrency,
-        fiat_amount: fiatAmount,
-        price_per_unit: fiatAmount / amountCrypto,
-        payment_method_id: paymentMethodId,
-        payment_details_encrypted: encryptedDetails,
-        min_order_amount: minOrderAmount,
-        max_order_amount: maxOrderAmount,
-        time_limit_minutes: timeLimitMinutes,
-        status: 'open',
-        remaining_amount: amountCrypto,
-        escrow_locked_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (offerError) throw offerError;
-
-    // 4. Audit log
-    await logAction('offer', offer.id, 'create_offer', {
-      token,
-      amount_crypto: amountCrypto,
-      fiat_currency: fiatCurrency,
-      fiat_amount: fiatAmount,
-      escrow_type: 'internal_ledger'
+        amountCrypto,
+        fiatCurrency,
+        fiatAmount,
+        paymentMethodId,
+        paymentDetailsEncrypted: encryptedDetails,
+        minOrderAmount: minOrderAmount || null,
+        maxOrderAmount: maxOrderAmount || null,
+        timeLimitMinutes,
+        adType
+      }
     });
+
+    if (error) {
+      console.error('Edge Function error:', error);
+      throw new Error(error.message || 'Failed to create offer');
+    }
+
+    if (!data?.success) {
+      throw new Error(data?.error || 'Failed to create offer');
+    }
 
     toast.success(`Offer created! Selling ${amountCrypto} ${token} for ${fiatAmount} ${fiatCurrency}`);
 
-    return offer.id;
+    return data.offer_id;
   } catch (error: unknown) {
     console.error('Create offer error:', error);
     const message = error instanceof Error ? error.message : 'Failed to create offer';

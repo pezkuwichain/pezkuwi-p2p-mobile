@@ -51,57 +51,77 @@ export function AdList({ type, filters }: AdListProps) {
     try {
       let offersData: P2PFiatOffer[] = [];
 
-      // Build base query
-      let query = supabase.from('p2p_fiat_offers').select('*');
-
-      if (type === 'buy') {
-        // Buy tab = show SELL offers (user wants to buy from sellers)
-        query = query.eq('ad_type', 'sell').eq('status', 'open').gt('remaining_amount', 0);
-      } else if (type === 'sell') {
-        // Sell tab = show BUY offers (user wants to sell to buyers)
-        query = query.eq('ad_type', 'buy').eq('status', 'open').gt('remaining_amount', 0);
-      } else if (type === 'my-ads' && user) {
-        // My offers - show all of user's offers
-        query = query.eq('seller_id', user.id);
-      }
-
-      // Apply filters if provided
-      if (filters) {
-        // Token filter
-        if (filters.token && filters.token !== 'all') {
-          query = query.eq('token', filters.token);
+      // For "my-ads", use Edge Function to bypass RLS (Telegram auth doesn't set auth.uid())
+      if (type === 'my-ads') {
+        const sessionToken = localStorage.getItem('p2p_session');
+        if (!sessionToken) {
+          setOffers([]);
+          setLoading(false);
+          return;
         }
 
-        // Fiat currency filter
-        if (filters.fiatCurrency && filters.fiatCurrency !== 'all') {
-          query = query.eq('fiat_currency', filters.fiatCurrency);
+        const { data, error } = await supabase.functions.invoke('get-my-offers', {
+          body: { sessionToken }
+        });
+
+        if (error) {
+          console.error('Get my offers error:', error);
+          setOffers([]);
+          setLoading(false);
+          return;
         }
 
-        // Payment method filter
-        if (filters.paymentMethods && filters.paymentMethods.length > 0) {
-          query = query.in('payment_method_id', filters.paymentMethods);
-        }
-
-        // Amount range filter
-        if (filters.minAmount !== null) {
-          query = query.gte('remaining_amount', filters.minAmount);
-        }
-        if (filters.maxAmount !== null) {
-          query = query.lte('remaining_amount', filters.maxAmount);
-        }
-
-        // Sort order
-        const sortColumn = filters.sortBy === 'price' ? 'price_per_unit' :
-                          filters.sortBy === 'completion_rate' ? 'created_at' :
-                          filters.sortBy === 'trades' ? 'created_at' :
-                          'created_at';
-        query = query.order(sortColumn, { ascending: filters.sortOrder === 'asc' });
+        offersData = data?.offers || [];
       } else {
-        query = query.order('created_at', { ascending: false });
-      }
+        // Build base query for public offers
+        let query = supabase.from('p2p_fiat_offers').select('*');
 
-      const { data } = await query;
-      offersData = data || [];
+        if (type === 'buy') {
+          // Buy tab = show SELL offers (user wants to buy from sellers)
+          query = query.eq('ad_type', 'sell').eq('status', 'open').gt('remaining_amount', 0);
+        } else if (type === 'sell') {
+          // Sell tab = show BUY offers (user wants to sell to buyers)
+          query = query.eq('ad_type', 'buy').eq('status', 'open').gt('remaining_amount', 0);
+        }
+
+        // Apply filters if provided
+        if (filters) {
+          // Token filter
+          if (filters.token && filters.token !== 'all') {
+            query = query.eq('token', filters.token);
+          }
+
+          // Fiat currency filter
+          if (filters.fiatCurrency && filters.fiatCurrency !== 'all') {
+            query = query.eq('fiat_currency', filters.fiatCurrency);
+          }
+
+          // Payment method filter
+          if (filters.paymentMethods && filters.paymentMethods.length > 0) {
+            query = query.in('payment_method_id', filters.paymentMethods);
+          }
+
+          // Amount range filter
+          if (filters.minAmount !== null) {
+            query = query.gte('remaining_amount', filters.minAmount);
+          }
+          if (filters.maxAmount !== null) {
+            query = query.lte('remaining_amount', filters.maxAmount);
+          }
+
+          // Sort order
+          const sortColumn = filters.sortBy === 'price' ? 'price_per_unit' :
+                            filters.sortBy === 'completion_rate' ? 'created_at' :
+                            filters.sortBy === 'trades' ? 'created_at' :
+                            'created_at';
+          query = query.order(sortColumn, { ascending: filters.sortOrder === 'asc' });
+        } else {
+          query = query.order('created_at', { ascending: false });
+        }
+
+        const { data } = await query;
+        offersData = data || [];
+      }
 
       // Enrich with reputation, payment method, and merchant tier
       const enrichedOffers = await Promise.all(

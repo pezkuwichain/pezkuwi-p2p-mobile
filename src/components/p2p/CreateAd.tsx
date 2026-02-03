@@ -23,7 +23,7 @@ interface CreateAdProps {
 
 export function CreateAd({ onAdCreated }: CreateAdProps) {
   const { user } = useAuth();
-  const { account } = useWallet();
+  const { address } = useWallet();
   
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
@@ -75,11 +75,11 @@ export function CreateAd({ onAdCreated }: CreateAdProps) {
   };
 
   const handleCreateAd = async () => {
-    console.log('🔥 handleCreateAd called', { account, user: user?.id });
+    console.log('🔥 handleCreateAd called', { address, user: user?.id });
 
-    if (!account || !user) {
+    if (!address || !user) {
       toast.error('Please connect your wallet and log in');
-      console.log('❌ No account or user', { account, user });
+      console.log('❌ No address or user', { address, user });
       return;
     }
 
@@ -133,7 +133,7 @@ export function CreateAd({ onAdCreated }: CreateAdProps) {
         .from('p2p_fiat_offers')
         .insert({
           seller_id: user.id,
-          seller_wallet: account,
+          seller_wallet: address,
           ad_type: adType,
           token,
           amount_crypto: cryptoAmt,

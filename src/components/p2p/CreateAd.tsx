@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useWallet } from '@/contexts/WalletContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import {
   getPaymentMethods,
   validatePaymentDetails,
+  createFiatOffer,
   type PaymentMethod,
   type FiatCurrency,
   type CryptoToken
@@ -23,7 +21,6 @@ interface CreateAdProps {
 
 export function CreateAd({ onAdCreated }: CreateAdProps) {
   const { user } = useAuth();
-  const { address } = useWallet();
   
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
@@ -75,16 +72,11 @@ export function CreateAd({ onAdCreated }: CreateAdProps) {
   };
 
   const handleCreateAd = async () => {
-    console.log('🔥 handleCreateAd called', { address, user: user?.id });
-
-    if (!address || !user) {
-      toast.error('Please connect your wallet and log in');
-      console.log('❌ No address or user', { address, user });
+    if (!user) {
       return;
     }
 
     if (!selectedPaymentMethod) {
-      toast.error('Please select a payment method');
       return;
     }
 
@@ -95,8 +87,6 @@ export function CreateAd({ onAdCreated }: CreateAdProps) {
     );
 
     if (!validation.valid) {
-      const firstError = Object.values(validation.errors)[0];
-      toast.error(firstError);
       return;
     }
 
@@ -105,63 +95,32 @@ export function CreateAd({ onAdCreated }: CreateAdProps) {
     const fiatAmt = parseFloat(fiatAmount);
 
     if (!cryptoAmt || cryptoAmt <= 0) {
-      toast.error('Invalid crypto amount');
       return;
     }
 
     if (!fiatAmt || fiatAmt <= 0) {
-      toast.error('Invalid fiat amount');
-      return;
-    }
-
-    if (selectedPaymentMethod.min_trade_amount && fiatAmt < selectedPaymentMethod.min_trade_amount) {
-      toast.error(`Minimum trade amount: ${selectedPaymentMethod.min_trade_amount} ${fiatCurrency}`);
-      return;
-    }
-
-    if (selectedPaymentMethod.max_trade_amount && fiatAmt > selectedPaymentMethod.max_trade_amount) {
-      toast.error(`Maximum trade amount: ${selectedPaymentMethod.max_trade_amount} ${fiatCurrency}`);
       return;
     }
 
     setLoading(true);
 
     try {
-      // Insert offer into Supabase
-      // Note: payment_details_encrypted is stored as JSON string (encryption handled server-side in prod)
-      const { data, error } = await supabase
-        .from('p2p_fiat_offers')
-        .insert({
-          seller_id: user.id,
-          seller_wallet: address,
-          ad_type: adType,
-          token,
-          amount_crypto: cryptoAmt,
-          remaining_amount: cryptoAmt,
-          fiat_currency: fiatCurrency,
-          fiat_amount: fiatAmt,
-          payment_method_id: selectedPaymentMethod.id,
-          payment_details_encrypted: JSON.stringify(paymentDetails),
-          time_limit_minutes: timeLimit,
-          min_order_amount: minOrderAmount ? parseFloat(minOrderAmount) : null,
-          max_order_amount: maxOrderAmount ? parseFloat(maxOrderAmount) : null,
-          status: 'open'
-        })
-        .select()
-        .single();
+      // Use createFiatOffer which handles escrow locking via internal ledger
+      await createFiatOffer({
+        token,
+        amountCrypto: cryptoAmt,
+        fiatCurrency,
+        fiatAmount: fiatAmt,
+        paymentMethodId: selectedPaymentMethod.id,
+        paymentDetails,
+        timeLimitMinutes: timeLimit,
+        minOrderAmount: minOrderAmount ? parseFloat(minOrderAmount) : undefined,
+        maxOrderAmount: maxOrderAmount ? parseFloat(maxOrderAmount) : undefined,
+      });
 
-      if (error) {
-        console.error('❌ Supabase error:', error);
-        toast.error(error.message || 'Failed to create offer');
-        return;
-      }
-
-      console.log('✅ Offer created successfully:', data);
-      toast.success('Ad created successfully!');
       onAdCreated();
     } catch (error) {
       if (import.meta.env.DEV) console.error('Create ad error:', error);
-      toast.error('Failed to create offer');
     } finally {
       setLoading(false);
     }

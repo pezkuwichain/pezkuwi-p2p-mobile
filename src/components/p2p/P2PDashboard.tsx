@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   PlusCircle, ClipboardList, TrendingUp, CheckCircle2, Clock,
-  ArrowLeft, Zap, Blocks, Wallet, ArrowDownToLine, ArrowUpFromLine
+  ArrowLeft, Zap, Blocks, Wallet, UserCheck, Store
 } from 'lucide-react';
 import { AdList } from './AdList';
 import { CreateAd } from './CreateAd';
@@ -236,20 +236,20 @@ export function P2PDashboard() {
           <Button
             variant="outline"
             size="sm"
-            className="h-auto py-3 flex-col"
-            onClick={() => setShowDepositModal(true)}
+            className="h-auto py-3 flex-col border-green-500/50 hover:bg-green-500/10"
+            onClick={() => window.open('https://t.me/pezhezbuysel', '_blank')}
           >
-            <ArrowDownToLine className="w-4 h-4 mb-1" />
-            <span className="text-xs">Deposit</span>
+            <Store className="w-4 h-4 mb-1 text-green-500" />
+            <span className="text-xs text-green-500">Trusted Seller</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="h-auto py-3 flex-col"
-            onClick={() => setShowWithdrawModal(true)}
+            className="h-auto py-3 flex-col border-blue-500/50 hover:bg-blue-500/10"
+            onClick={() => window.open('https://t.me/pezhezbuysel', '_blank')}
           >
-            <ArrowUpFromLine className="w-4 h-4 mb-1" />
-            <span className="text-xs">Withdraw</span>
+            <UserCheck className="w-4 h-4 mb-1 text-blue-500" />
+            <span className="text-xs text-blue-500">Trusted Buyer</span>
           </Button>
           <Button
             size="sm"

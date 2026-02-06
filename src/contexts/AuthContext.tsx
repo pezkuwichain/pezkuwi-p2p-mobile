@@ -157,38 +157,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.Telegram?.WebApp.HapticFeedback.notificationOccurred('success');
   }, [user]);
 
-  // Login via URL params (from mini-app redirect)
+  // Login via URL params (from mini-app redirect with session_token)
   const loginViaParams = useCallback(async () => {
     const params = new URLSearchParams(window.location.search);
-    const tgId = params.get('tg_id');
-    const wallet = params.get('wallet');
+    const sessionToken = params.get('session_token');
     const from = params.get('from');
-    const ts = params.get('ts');
 
-    if (!tgId || from !== 'miniapp') {
+    // Check if coming from miniapp with session_token
+    if (!sessionToken || from !== 'miniapp') {
       return false;
-    }
-
-    // Validate timestamp (not older than 5 minutes)
-    if (ts) {
-      const timestamp = parseInt(ts);
-      const now = Date.now();
-      if (now - timestamp > 5 * 60 * 1000) {
-        console.warn('URL params expired');
-        return false;
-      }
     }
 
     setIsLoading(true);
 
     try {
-      // Verify with backend and get/create user
+      // Verify session token with backend
       const { data, error: fnError } = await supabase.functions.invoke('telegram-auth', {
-        body: {
-          telegram_id: parseInt(tgId),
-          wallet_address: wallet || undefined,
-          from_miniapp: true
-        }
+        body: { sessionToken }
       });
 
       if (fnError) throw fnError;
@@ -215,7 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return true;
     } catch (err) {
-      console.error('URL param login error:', err);
+      console.error('Session token login error:', err);
       return false;
     } finally {
       setIsLoading(false);
@@ -261,9 +246,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Try URL params auth (from mini-app redirect)
+      // Try URL params auth (from mini-app redirect with session_token)
       const params = new URLSearchParams(window.location.search);
-      if (params.get('from') === 'miniapp' && params.get('tg_id')) {
+      if (params.get('from') === 'miniapp' && params.get('session_token')) {
         const success = await loginViaParams();
         if (success) return;
       }

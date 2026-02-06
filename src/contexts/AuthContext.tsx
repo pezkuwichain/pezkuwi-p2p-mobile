@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return tg.initDataUnsafe.user;
   }, []);
 
-  // Login with Telegram
+  // Login with Telegram or session token
   const login = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -93,41 +93,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const tg = window.Telegram?.WebApp;
 
-      if (!tg?.initData) {
-        throw new Error('Telegram WebApp not available. Open from Telegram.');
+      // Method 1: Telegram WebApp available
+      if (tg?.initData) {
+        const { data, error: fnError } = await supabase.functions.invoke('telegram-auth', {
+          body: { initData: tg.initData }
+        });
+
+        if (fnError) throw fnError;
+        if (!data?.user) throw new Error('Authentication failed');
+
+        setUser(data.user);
+        const p2pUserId = data.auth_user_id || data.user.id;
+        setCurrentUserId(p2pUserId);
+        setTelegramUser(getTelegramUser());
+
+        if (data.session_token) {
+          localStorage.setItem('p2p_session', data.session_token);
+        }
+        if (data.auth_user_id) {
+          localStorage.setItem('p2p_auth_user_id', data.auth_user_id);
+        }
+
+        window.Telegram?.WebApp.HapticFeedback.notificationOccurred('success');
+        return;
       }
 
-      // Call Supabase Edge Function to verify initData and get/create user
-      const { data, error: fnError } = await supabase.functions.invoke('telegram-auth', {
-        body: { initData: tg.initData }
-      });
+      // Method 2: URL session_token (from MiniApp redirect)
+      const params = new URLSearchParams(window.location.search);
+      const sessionToken = params.get('session_token');
+      if (sessionToken) {
+        const { data, error: fnError } = await supabase.functions.invoke('telegram-auth', {
+          body: { sessionToken }
+        });
 
-      if (fnError) throw fnError;
+        if (fnError) throw fnError;
+        if (!data?.user) throw new Error('Authentication failed');
 
-      if (!data?.user) {
-        throw new Error('Authentication failed');
+        setUser(data.user);
+        const p2pUserId = data.auth_user_id || data.user.id;
+        setCurrentUserId(p2pUserId);
+
+        if (data.session_token) {
+          localStorage.setItem('p2p_session', data.session_token);
+        }
+        if (data.auth_user_id) {
+          localStorage.setItem('p2p_auth_user_id', data.auth_user_id);
+        }
+
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
       }
 
-      setUser(data.user);
-      // Use auth_user_id for P2P operations (balance queries, etc.)
-      // This is the auth.users ID used by p2p_deposit_withdraw_requests FK
-      const p2pUserId = data.auth_user_id || data.user.id;
-      setCurrentUserId(p2pUserId);
-      setTelegramUser(getTelegramUser());
-
-      // Store session token and auth_user_id if provided
-      if (data.session_token) {
-        localStorage.setItem('p2p_session', data.session_token);
-      }
-      if (data.auth_user_id) {
-        localStorage.setItem('p2p_auth_user_id', data.auth_user_id);
-      }
-
-      window.Telegram?.WebApp.HapticFeedback.notificationOccurred('success');
+      // No auth method available
+      throw new Error('Please open from Telegram MiniApp');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
-      window.Telegram?.WebApp.HapticFeedback.notificationOccurred('error');
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);
